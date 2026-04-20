@@ -15,18 +15,30 @@ $disease = $_GET["disease"] ?? "";
 /* ================= AI FUNCTION ================= */
 function predict($bp, $sugar, $bmi)
 {
-  $score =
-    ($bp / 200) * 40 +
-    ($sugar / 300) * 35 +
-    ($bmi / 50) * 25;
+  $score = 0;
 
-  if ($score > 75) return "Critical 🔴";
-  if ($score > 50) return "High 🟠";
-  if ($score > 30) return "Medium 🟡";
-  return "Low 🟢";
+  if ($bp < 120) $score += 10;
+  elseif ($bp < 140) $score += 25;
+  elseif ($bp < 160) $score += 40;
+  else $score += 60;
+
+  if ($sugar < 100) $score += 10;
+  elseif ($sugar < 150) $score += 25;
+  elseif ($sugar < 200) $score += 40;
+  else $score += 60;
+
+  if ($bmi < 25) $score += 10;
+  elseif ($bmi < 30) $score += 25;
+  elseif ($bmi < 35) $score += 40;
+  else $score += 60;
+
+  if ($score <= 40) return "Low";
+  if ($score <= 80) return "Medium";
+  if ($score <= 120) return "High";
+  return "Critical";
 }
 
-/* ================= QUERY (PDO FIXED) ================= */
+/* ================= QUERY ================= */
 $sql = "SELECT * FROM patients WHERE 1=1";
 $params = [];
 
@@ -46,59 +58,33 @@ $res = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 /* ================= DATA ================= */
 $rows = [];
-$bpArr = [];
-$sugarArr = [];
-$healthy = 0;
-$risk = 0;
+$low = $medium = $high = $critical = 0;
+
+/* chart diseases */
+$diseaseChart = [];
 
 foreach ($res as $r) {
 
-  $bp = (float)$r["blood_pressure"];
-  $sugar = (float)$r["sugar_level"];
-  $bmi = (float)$r["bmi"];
+  $level = predict(
+    $r["blood_pressure"],
+    $r["sugar_level"],
+    $r["bmi"]
+  );
 
-  $bpArr[] = $bp;
-  $sugarArr[] = $sugar;
+  if ($level == "Low") $low++;
+  elseif ($level == "Medium") $medium++;
+  elseif ($level == "High") $high++;
+  else $critical++;
 
-  if ($bp > 140 || $sugar > 180 || $bmi > 30) $risk++;
-  else $healthy++;
+  /* disease chart */
+  $d = $r["disease_type"];
+  if (!isset($diseaseChart[$d])) {
+    $diseaseChart[$d] = 0;
+  }
+  $diseaseChart[$d]++;
 
   $rows[] = $r;
 }
-
-/* ================= DISEASE STATS ================= */
-$diseaseData = [];
-$dRes = $connect->query("SELECT disease_type, COUNT(*) c FROM patients GROUP BY disease_type");
-
-if ($dRes) {
-  while ($d = $dRes->fetch(PDO::FETCH_ASSOC)) {
-    $diseaseData[$d["disease_type"]] = $d["c"];
-  }
-}
-
-/* ================= CORRELATION ================= */
-function correlation($x, $y)
-{
-  $n = count($x);
-  if ($n < 2) return 0;
-
-  $sx = array_sum($x);
-  $sy = array_sum($y);
-
-  $sxy = $sx2 = $sy2 = 0;
-
-  for ($i = 0; $i < $n; $i++) {
-    $sxy += $x[$i] * $y[$i];
-    $sx2 += $x[$i] * $x[$i];
-    $sy2 += $y[$i] * $y[$i];
-  }
-
-  $den = sqrt(($n * $sx2 - $sx * $sx) * ($n * $sy2 - $sy * $sy));
-
-  return $den == 0 ? 0 : (($n * $sxy - $sx * $sy) / $den);
-}
-
-$correlation = correlation($bpArr, $sugarArr);
 ?>
 
 <!DOCTYPE html>
@@ -112,71 +98,81 @@ $correlation = correlation($bpArr, $sugarArr);
 
 <style>
 body{
-  background: linear-gradient(135deg,#eef2f7,#dbeafe);
-  font-family: "Segoe UI";
+  background:#f4f7ff;
+  font-family:Segoe UI;
 }
 
-body.dark{
-  background:#0b1220;
-  color:white;
-}
-
+/* HEADER */
 .header{
-  background: linear-gradient(135deg,#0f766e,#14b8a6);
+  background:linear-gradient(135deg,#0f766e,#14b8a6);
   color:white;
-  padding:18px;
+  padding:20px;
   border-radius:18px;
 }
 
+/* CARDS */
 .card-box{
   padding:22px;
-  border-radius:20px;
+  border-radius:16px;
   color:white;
   text-align:center;
+  font-weight:bold;
 }
 
-.c1{background:linear-gradient(135deg,#2563eb,#60a5fa)}
-.c2{background:linear-gradient(135deg,#10b981,#34d399)}
-.c3{background:linear-gradient(135deg,#f59e0b,#fbbf24)}
-.c4{background:linear-gradient(135deg,#ef4444,#f87171)}
+.c-low{background:#10b981}
+.c-medium{background:#f59e0b}
+.c-high{background:#3b82f6}
+.c-critical{background:#ef4444}
 
+/* TABLE */
 .table-box{
   background:white;
-  border-radius:20px;
-  padding:18px;
+  padding:20px;
+  border-radius:15px;
   margin-top:20px;
-}
-
-body.dark .table-box{
-  background:#1e293b;
+  box-shadow:0 5px 20px rgba(0,0,0,0.1);
 }
 
 table{
   width:100%;
+  border-collapse:collapse;
 }
 
 th{
   background:#0f766e;
   color:white;
-  padding:10px;
+  padding:12px;
+  text-align:center;
 }
 
 td{
   text-align:center;
-  padding:8px;
+  padding:12px;
+  border-bottom:1px solid #eee;
 }
 
-.charts{
+tr:hover td{
+  background:#f1f5f9;
+}
+
+/* CHARTS */
+.chart-container{
   display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
+  grid-template-columns:repeat(3,1fr);
   gap:15px;
-  margin-top:20px;
+  margin-top:25px;
 }
 
 .chart-box{
   background:white;
   padding:15px;
-  border-radius:20px;
+  border-radius:15px;
+  height:320px;
+}
+
+canvas{
+  width:100% !important;
+  height:260px !important;
 }
 </style>
 
@@ -187,40 +183,34 @@ td{
 <div class="container py-4">
 
 <!-- HEADER -->
-<div class="header d-flex justify-content-between">
-  <h4>🧠 Medical Dashboard</h4>
-  <button class="btn btn-light btn-sm" onclick="document.body.classList.toggle('dark')">🌙</button>
+<div class="header">
+  <h4>🏥 Medical Dashboard</h4>
 </div>
 
 <!-- CARDS -->
 <div class="row mt-3 g-3">
 
-  <div class="col-md-4">
-    <div class="card-box c2">Healthy <h2><?= $healthy ?></h2></div>
-  </div>
-
-  <div class="col-md-4">
-    <div class="card-box c4">Risk <h2><?= $risk ?></h2></div>
-  </div>
-
-  <div class="col-md-4">
-    <div class="card-box c3">Correlation <h2><?= round($correlation,2) ?></h2></div>
-  </div>
+  <div class="col-md-3"><div class="card-box c-low">🟢 Low <h3><?= $low ?></h3></div></div>
+  <div class="col-md-3"><div class="card-box c-medium">🟡 Medium <h3><?= $medium ?></h3></div></div>
+  <div class="col-md-3"><div class="card-box c-high">🟠 High <h3><?= $high ?></h3></div></div>
+  <div class="col-md-3"><div class="card-box c-critical">🔴 Critical <h3><?= $critical ?></h3></div></div>
 
 </div>
 
 <!-- SEARCH -->
-<div class="table-box">
+<div class="table-box mt-3">
 
 <form class="row g-2">
 
   <div class="col-md-6">
-    <input name="search" class="form-control" placeholder="Search patient...">
+    <input name="search" class="form-control"
+    value="<?= htmlspecialchars($search) ?>"
+    placeholder="Search patient...">
   </div>
 
   <div class="col-md-4">
     <select name="disease" class="form-control">
-      <option value="">All Diseases</option>
+      <option value="">All</option>
       <option>Diabetes</option>
       <option>Hypertension</option>
       <option>Heart Disease</option>
@@ -240,18 +230,19 @@ td{
 <div class="table-box">
 
 <table>
+
 <tr>
 <th>Name</th>
 <th>Disease</th>
 <th>BP</th>
 <th>Sugar</th>
 <th>BMI</th>
-<th>Risk</th>
+<th>Status</th>
 </tr>
 
 <?php foreach($rows as $r): ?>
 <tr>
-<td><?= $r["name"] ?></td>
+<td><?= htmlspecialchars($r["name"]) ?></td>
 <td><?= $r["disease_type"] ?></td>
 <td><?= $r["blood_pressure"] ?></td>
 <td><?= $r["sugar_level"] ?></td>
@@ -265,11 +256,11 @@ td{
 </div>
 
 <!-- CHARTS -->
-<div class="charts">
+<div class="chart-container">
 
 <div class="chart-box"><canvas id="pie"></canvas></div>
-<div class="chart-box"><canvas id="scatter"></canvas></div>
-<div class="chart-box"><canvas id="disease"></canvas></div>
+<div class="chart-box"><canvas id="bar"></canvas></div>
+<div class="chart-box"><canvas id="doughnut"></canvas></div>
 
 </div>
 
@@ -281,32 +272,38 @@ td{
 new Chart(document.getElementById("pie"),{
 type:"pie",
 data:{
-labels:["Healthy","Risk"],
-datasets:[{data:[<?= $healthy ?>,<?= $risk ?>]}]
-}
-});
-
-/* SCATTER */
-new Chart(document.getElementById("scatter"),{
-type:"scatter",
-data:{
+labels:["Low","Medium","High","Critical"],
 datasets:[{
-label:"BP vs Sugar",
-data:[
-<?php foreach($bpArr as $i=>$v): ?>
-{x:<?= $v ?>, y:<?= $sugarArr[$i] ?>},
-<?php endforeach; ?>
-]
+data:[<?= $low ?>,<?= $medium ?>,<?= $high ?>,<?= $critical ?>],
+backgroundColor:["#10b981","#f59e0b","#3b82f6","#ef4444"]
 }]
 }
 });
 
-/* DISEASE */
-new Chart(document.getElementById("disease"),{
-type:"pie",
+/* BAR */
+new Chart(document.getElementById("bar"),{
+type:"bar",
 data:{
-labels:<?= json_encode(array_keys($diseaseData)) ?>,
-datasets:[{data:<?= json_encode(array_values($diseaseData)) ?>}]
+labels:["Low","Medium","High","Critical"],
+datasets:[{
+data:[<?= $low ?>,<?= $medium ?>,<?= $high ?>,<?= $critical ?>],
+backgroundColor:["#10b981","#f59e0b","#3b82f6","#ef4444"]
+}]
+}
+});
+
+/* DOUGHNUT (DISEASES FIXED) */
+new Chart(document.getElementById("doughnut"),{
+type:"doughnut",
+data:{
+labels:<?= json_encode(array_keys($diseaseChart)) ?>,
+datasets:[{
+data:<?= json_encode(array_values($diseaseChart)) ?>,
+backgroundColor:["#3b82f6","#10b981","#f59e0b","#ef4444","#8b5cf6"]
+}]
+},
+options:{
+cutout:"65%"
 }
 });
 

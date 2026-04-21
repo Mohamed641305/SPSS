@@ -103,7 +103,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
 <head>
 
-  <title>SPSS PRO Dashboard</title>
+  <title>SPSS Dashboard</title>
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -148,7 +148,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
   <div class="container py-4">
 
-    <h2 class="text-center">🩺 SPSS PRO Medical Dashboard</h2>
+    <h2 class="text-center">🩺 SPSS Medical Dashboard</h2>
 
     <!-- UPLOAD -->
     <div class="card p-3 mb-3">
